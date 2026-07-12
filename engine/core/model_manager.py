@@ -37,7 +37,7 @@ NLLB_MODEL_FILE = os.path.join(NLLB_MODEL_DIR, "model.bin")
 #   2. bundled runtime_url.txt file
 #   3. default (Firebase Storage)
 
-RUNTIME_CHECK_FILE = os.path.join(RUNTIME_DIR, "torch", "__init__.py")
+RUNTIME_CHECK_FILE = os.path.join(RUNTIME_DIR, "onnxruntime", "__init__.py")
 
 _RUNTIME_URL_FILE = os.path.join(
     os.path.dirname(__file__), "..", "..", "runtime_url.txt",
