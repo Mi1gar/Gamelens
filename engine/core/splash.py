@@ -3,9 +3,21 @@
 Shown during app startup while models/runtime download.
 Auto-closes when startup is complete.
 """
+import sys
 import tkinter as tk
 import time
 import os
+
+
+def _get_bundle_path(relative_path: str) -> str:
+    """Get path to bundled file (works in dev and PyInstaller EXE)."""
+    if getattr(sys, 'frozen', False):
+        base = sys._MEIPASS
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+        for _ in range(3):
+            base = os.path.dirname(base)
+    return os.path.join(base, relative_path)
 
 
 class SplashScreen:
@@ -34,9 +46,8 @@ class SplashScreen:
         self._logo_img = None
         self._logo_label = None
         logo_paths = [
+            _get_bundle_path("icons/logo/gamelens_logo.png"),
             os.path.join(os.path.dirname(__file__), "..", "..",
-                         "icons", "logo", "gamelens_logo.png"),
-            os.path.join(os.path.dirname(__file__), "..",
                          "icons", "logo", "gamelens_logo.png"),
         ]
         for lp in logo_paths:

@@ -56,6 +56,8 @@ datas = [
     # Runtime download URLs (configurable per release)
     (str(ROOT / 'runtime_url.txt'), '.'),
     (str(ROOT / 'nllb_url.txt'), '.'),
+    # Logo (for splash screen)
+    (str(ROOT / 'icons' / 'logo' / 'gamelens_logo.png'), 'icons/logo'),
     # YOLO model (tiny, 5 MB — always bundled)
     (str(ROOT / 'models' / 'Vision_C1P_02.pt'), 'models'),
     # ONNX model (YOLO exported, ~9 MB)
