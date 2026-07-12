@@ -53,8 +53,13 @@ hiddenimports = [
 datas = [
     # Version file (for OTA updates)
     (str(ROOT / 'version.json'), '.'),
+    # Runtime download URLs (configurable per release)
+    (str(ROOT / 'runtime_url.txt'), '.'),
+    (str(ROOT / 'nllb_url.txt'), '.'),
     # YOLO model (tiny, 5 MB — always bundled)
     (str(ROOT / 'models' / 'Vision_C1P_02.pt'), 'models'),
+    # ONNX model (YOLO exported, ~9 MB)
+    (str(ROOT / 'models' / 'Vision_C1P_02.onnx'), 'models'),
     # Import dialogues
     (str(ROOT / 'import'), 'import'),
     # Growing DB (if exists)
@@ -121,7 +126,7 @@ a = Analysis(
         'yt_dlp',
         'rich', 'prompt_toolkit', 'pygments',
         'sympy', 'mpmath', 'networkx',
-        'requests_toolbelt', 'httpx', 'httpcore',
+        'requests_toolbelt',
         'IPython', 'ipython', 'traitlets',
         'wandb', 'mlflow', 'clearml',
         'einops',
@@ -149,7 +154,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

@@ -246,12 +246,12 @@ def is_runtime_installed() -> bool:
 
 
 def install_runtime(progress_callback=None) -> bool:
-    """Download ML runtime (one-time, ~2-3 GB)."""
+    """Download ML runtime (one-time, ~280 MB)."""
     if is_runtime_installed():
         print("[ModelManager] ML runtime already installed.")
         return True
 
-    print("[ModelManager] ML runtime not found. Downloading (~2-3 GB, one-time)...")
+    print("[ModelManager] ML runtime not found. Downloading (~280 MB, one-time)...")
     os.makedirs(RUNTIME_DIR, exist_ok=True)
 
     zip_path = os.path.join(RUNTIME_DIR, "runtime.zip")
@@ -303,16 +303,23 @@ def _download_file(url: str, dest: str, progress_callback=None):
 
 # ── Startup check ──
 
-def ensure_models() -> bool:
+def ensure_models(progress_callback=None) -> bool:
     """Ensure all models and runtime are available. Call at app startup.
+
+    Args:
+        progress_callback: Optional fn(pct, done_mb, total_mb) for UI.
 
     Returns True if everything is ready.
     Must be called BEFORE any torch/engine imports!
     """
+    if progress_callback is None:
+        progress_callback = lambda p, d, t: None
+
     # ML runtime (must be first — everything depends on it)
     if not is_runtime_installed():
         print("[ModelManager] ML runtime required. Downloading...")
-        if not install_runtime():
+        progress_callback(0, 0, 280)
+        if not install_runtime(progress_callback):
             print("[ModelManager] FATAL: ML runtime download failed.")
             return False
     elif RUNTIME_DIR not in sys.path:

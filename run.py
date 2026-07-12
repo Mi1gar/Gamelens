@@ -134,10 +134,23 @@ def main():
         "--skip-update", action="store_true",
         help="Skip update check on startup",
     )
+    parser.add_argument(
+        "--no-splash", action="store_true",
+        help="Skip splash screen (console mode)",
+    )
     args = parser.parse_args()
 
-    # ── OTA Update Check (before loading any heavy models) ──
+    # ── Splash Screen ──
+    splash = None
+    if not args.no_splash:
+        from engine.core.splash import show_splash
+        splash = show_splash()
+        splash.set_status("Baslatiliyor...")
+
+    # ── OTA Update Check ──
     if not args.skip_update and getattr(sys, 'frozen', False):
+        if splash:
+            splash.set_status("Guncelleme kontrol ediliyor...")
         try:
             from engine.core.updater import check_update
             result = check_update(auto_install=True)
@@ -146,26 +159,31 @@ def main():
         except Exception as e:
             print(f"[run] Update check failed: {e}")
 
-    # ── Model Check (download NLLB on first launch) ──
+    # ── Model + Runtime Check ──
     try:
-        from engine.core.model_manager import ensure_models, download_model
-        if not ensure_models():
-            print("\n" + "=" * 60)
-            print("  NLLB translation model not found.")
-            print("  Downloading now (~600 MB, one-time)...")
-            print("=" * 60)
-            def progress(pct, done, total):
-                bar = "=" * (pct // 5) + " " * (20 - pct // 5)
-                print(f"\r  [{bar}] {pct}% ({done:.0f}/{total:.0f} MB)",
-                      end="", flush=True)
-            success = download_model(progress)
-            if success:
-                print("\n[run] Model ready!")
-            else:
-                print("\n[run] Model download failed. "
-                      "App will run with local DB only.")
+        from engine.core.model_manager import ensure_models
+
+        def startup_progress(pct, done, total):
+            if splash:
+                splash.set_progress(pct, done, total)
+
+        if splash:
+            splash.set_status("ML kutuphaneleri kontrol ediliyor...")
+
+        if not ensure_models(progress_callback=startup_progress):
+            if splash:
+                splash.set_status("HATA: Indirme basarisiz. Interneti kontrol edin.")
+                import time
+                time.sleep(5)
+                splash.close()
+            return
     except Exception as e:
-        print(f"[run] Model check skipped: {e}")
+        if splash:
+            splash.set_status(f"Hata: {e}")
+            import time
+            time.sleep(3)
+            splash.close()
+        return
 
     if args.list_games:
         list_games()
