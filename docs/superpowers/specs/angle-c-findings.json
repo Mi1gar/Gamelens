@@ -1,0 +1,44 @@
+[
+  {
+    "file": "D:/gammasoftware/GameLens/src/ui/launcher.py",
+    "line": 118,
+    "summary": "launcher.py calls engine.start() unconditionally after select_game(), even after a successful mod install.",
+    "failure_scenario": "User selects a game whose mod is in the catalog. select_game() installs the mod, sends callback 'mod_installed', and returns early without loading an adapter. launcher.py then calls engine.start() which spawns _run_loop(). _run_loop() re-fetches the adapter from GameRegistry (not the catalog) and starts the full YOLO+OCR+translation pipeline. The mod's Turkish subtitles are OCR'd, detected by _is_turkish_text(), and filtered out — producing no overlay output while wasting ~200MB VRAM and GPU cycles. The design spec states 'OCR pipeline NOT started' after mod install, but this is not enforced."
+  },
+  {
+    "file": "D:/gammasoftware/GameLens/src/ui/launcher.py",
+    "line": 121,
+    "summary": "Line 121 passes engine.hook_manager.active_adapter (which is None after mod install) to set_active_adapter(), violating the BaseGameAdapter type contract.",
+    "failure_scenario": "After a successful catalog mod install, select_game() returns early without setting hook_manager.active_adapter (remains None). line 121 calls set_active_adapter(None). The method handles None gracefully (early-returns at the 'if self.active_adapter:' guards), but it is a latent type violation — any future stricter type enforcement or a refactor assuming non-None adapter would crash here. Additionally, the comment 'Apply monitor region to adapter' suggests this line was meant to pass a monitor region, not re-set the adapter, indicating unfinished code."
+  },
+  {
+    "file": "D:/gammasoftware/GameLens/engine/core/engine.py",
+    "line": 54,
+    "summary": "Early return in select_game() skips adapter loading, but _run_loop() unconditionally re-fetches the adapter from GameRegistry, making the early return ineffective at preventing the OCR pipeline.",
+    "failure_scenario": "After mod install, select_game() returns early — the adapter is never loaded and connect() is never called from select_game(). _run_loop() (line 112) calls GameRegistry.get_adapter(self.active_game_id) which creates a fresh adapter instance and calls connect(). The full OCR pipeline starts. This contradicts the design intent: the spec explicitly says 'OCR pipeline NOT started' after a mod install, but the pipeline runs anyway, OCR'ing the mod's Turkish subtitles and filtering them out silently."
+  },
+  {
+    "file": "D:/gammasoftware/GameLens/engine/core/catalog_manager.py",
+    "line": 44,
+    "summary": "catalog.check() performs an exact dict key match on game_id — a mismatch between catalog keys and GameRegistry keys silently falls through to the OCR pipeline without warning.",
+    "failure_scenario": "Catalog uses key 'rdr2' while GameRegistry uses 'red_dead_redemption_2'. User selects 'Red Dead Redemption 2' from the launcher. select_game() passes game_id='red_dead_redemption_2' to catalog.check(), which does catalog['games'].get('red_dead_redemption_2') → None. The mod is silently skipped and the OCR pipeline runs. No diagnostic message is printed. The user gets OCR quality instead of mod quality without knowing a mod was available."
+  },
+  {
+    "file": "D:/gammasoftware/GameLens/engine/core/catalog_manager.py",
+    "line": 57,
+    "summary": "CatalogManager._load() performs a blocking HTTP fetch (up to 10s timeout) on the calling thread during select_game().",
+    "failure_scenario": "User selects a game on a slow or unreliable network. _load() calls _fetch_url(CATALOG_URL, timeout=10.0) on the same thread as the caller (launcher.py's main thread in the Tkinter event loop). The HTTP request blocks for up to 10 seconds, causing the entire UI to freeze. If the request times out, _load() falls through to cache. On repeated cold starts (e.g., user testing multiple game selections), each call blocks for up to 10s."
+  },
+  {
+    "file": "D:/gammasoftware/GameLens/engine/core/mod_installer.py",
+    "line": 135,
+    "summary": "install() uses hard bracket access mod['download_url'] instead of mod.get('download_url'), risking an uncaught KeyError if the catalog entry is malformed.",
+    "failure_scenario": "A future catalog update changes the schema (e.g., renames 'download_url' to 'url') or a corrupted cache entry omits the key. line 135 raises KeyError('download_url'), caught by the generic 'except Exception' on line 141. The error message is '[ModInstaller] Install failed: download_url' — it degrades gracefully to the OCR fallback, but the misleading error message makes debugging hard. Same issue exists for file_entry['to'] and file_entry['from'] at lines 137-138."
+  },
+  {
+    "file": "D:/gammasoftware/GameLens/engine/core/engine.py",
+    "line": 112,
+    "summary": "_run_loop() calls GameRegistry.get_adapter() which creates a new adapter instance, duplicating the instance creation already done in select_game() — but only when no mod is found.",
+    "failure_scenario": "When no catalog mod is found, select_game() (line 61) creates an adapter via GameRegistry.get_adapter() and calls set_active_adapter(adapter) which invokes adapter.connect(). Then _run_loop() (line 112) creates a SECOND adapter instance and calls set_active_adapter() again, triggering disconnect() on the first instance and connect() on the second. Both instances' __init__ run, and the first is immediately discarded. For adapters with heavyweight __init__ (e.g., loading configs, opening sockets), this is doubled work. When a catalog mod IS found, select_game() skips adapter creation entirely, so only _run_loop() creates one instance — inconsistent code paths for the two scenarios."
+  }
+]

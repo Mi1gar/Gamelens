@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Approved translations: everyone reads, only reviewers write ──
+    match /games/{game}/approved/{entry} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null
+        && request.auth.token.role == 'reviewer';
+    }
+
+    // ── Raw (unapproved) translations: anyone can submit, only reviewers read/delete ──
+    match /games/{game}/raw/{entry} {
+      allow read: if request.auth != null
+        && request.auth.token.role == 'reviewer';
+      allow create, update: if true;
+      allow delete: if request.auth != null
+        && request.auth.token.role == 'reviewer';
+    }
+
+    // ── Game metadata: public read, reviewer write ──
+    match /games/{game}/meta {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.auth.token.role == 'reviewer';
+    }
+
+    // ── Release channel: public read, reviewer write ──
+    match /releases/{channel} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.auth.token.role == 'reviewer';
+    }
+  }
+}

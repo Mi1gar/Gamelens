@@ -1,0 +1,26 @@
+[
+  {
+    "file": "engine/core/mod_installer.py",
+    "line": 11,
+    "summary": "_find_steam_dir reimplements Steam registry lookup already present in GameDetector._check_steam_registry (game_detector.py:29).",
+    "failure_scenario": "Both query the same winreg keys (SOFTWARE\\...\\Uninstall\\Steam App {appid}) via winreg.OpenKey + QueryValueEx. Existing GameDetector._check_steam_registry() is hardcoded for Metro appid only; make it accept an appid parameter and call it instead of the private function."
+  },
+  {
+    "file": "engine/core/mod_installer.py",
+    "line": 182,
+    "summary": "ModInstaller._download and CatalogManager._fetch_url (catalog_manager.py:104) share identical urllib.request.Request + User-Agent + urlopen boilerplate with no shared HTTP utility.",
+    "failure_scenario": "Both create urllib.request.Request(url, headers={'User-Agent': 'GameLens/1.0'}) and call urlopen() independently. Extract a shared _http_get_bytes(url, timeout) helper that returns the raw response, then each consumer calls resp.read() or shutil.copyfileobj on the result."
+  },
+  {
+    "file": "engine/core/catalog_manager.py",
+    "line": 59,
+    "summary": "CatalogManager._load/_save_cache invents a TTL-based cache with disk persistence, while nllb_translator._cache (line 15), subtitle_loader.cache_file (line 16), and translation_service._cache (line 25) each have their own ad-hoc caching.",
+    "failure_scenario": "Four subsystems each implement independent caching. No shared cache abstraction (e.g. FileCache with TTL) is available to call. CatalogManager's pattern is the most complete but still lives in isolation."
+  },
+  {
+    "file": "engine/core/catalog_manager.py",
+    "line": 114,
+    "summary": "os.makedirs(os.path.dirname(...), exist_ok=True) before file writes is repeated across 6 files with identical structure.",
+    "failure_scenario": "Same directory-creation boilerplate appears in catalog_manager.py:114, mod_installer.py:226, frame_collector.py:20-21, translation_service.py:144, translator.py:168. Extract a one-line ensure_dir(path) utility to remove repetition."
+  }
+]

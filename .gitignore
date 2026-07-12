@@ -1,0 +1,77 @@
+# ── ML Models (large binary files) ──
+models/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.ckpt
+*.bin
+
+# ── Firebase credentials ──
+firebase/*-key.json
+*.firebase-key.json
+
+# ── Node ──
+ui/node_modules/
+ui/dist/
+
+# ── Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# ── Build artifacts ──
+build/
+dist/
+*.spec.bak
+
+# ── Release packages ──
+gamelens_alpha/
+*.zip
+*.7z
+
+# ── Datasets ──
+dataset_live/
+dataset/
+dataset_final/
+dataset_test/
+modelveri/
+datasets/
+
+# ── Training artifacts ──
+yolotest/runs/
+yolotest/*.mp4
+yolotest/*.avi
+checkpoints/
+runs/
+
+# ── Auto-labeling pipeline runtime ──
+otomatik_egitim_pipeline/data/
+otomatik_egitim_pipeline/output/
+otomatik_egitim_pipeline/__pycache__/
+
+# ── Logs ──
+*.log
+logs/
+translations.csv
+
+# ── IDE / OS ──
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Superpowers ──
+.superpowers/
+
+# ── Video files ──
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# ── Cache ──
+cache/
+__pycache__/

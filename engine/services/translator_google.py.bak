@@ -1,0 +1,25 @@
+from deep_translator import GoogleTranslator
+import time
+
+class TranslationService:
+    def __init__(self, model_path: str = "online_google"):
+        self.model_path = model_path
+        print(f"[TranslationService] Initializing Online Mode (Google Translate)...")
+        # Initialize the translator
+        self.translator = GoogleTranslator(source='auto', target='tr')
+        print("[TranslationService] Service Ready (Online).")
+
+    def translate(self, text: str, source_lang: str = "en", target_lang: str = "tr") -> str:
+        """
+        Translates text using Google Translate API (Online).
+        """
+        if not text or len(text.strip()) < 2:
+            return text
+            
+        try:
+            # Perform translation
+            translated = self.translator.translate(text)
+            return translated
+        except Exception as e:
+            print(f"[Translation Error] {e}")
+            return text + " (Error)"
