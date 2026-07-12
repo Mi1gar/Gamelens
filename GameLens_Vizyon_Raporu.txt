@@ -1,0 +1,391 @@
+================================================================================
+                    GAME LENS — ÜRÜN VİZYON RAPORU
+================================================================================
+Tarih: 28 Mayıs 2026
+Proje: Game Lens (eski adıyla "dublaj")
+Konum: D:\gammasoftware\dublaj
+
+================================================================================
+1. PROJE ÖZETİ
+================================================================================
+
+Game Lens, oyun içi altyazıları gerçek zamanlı yakalayıp hedef dile çeviren
+ve oyunun üzerine overlay olarak gösteren bir masaüstü uygulamasıdır.
+
+Mevcut teknoloji stack'i:
+  - Python 3.11
+  - Tkinter (UI)
+  - RapidOCR + ONNX (OCR)
+  - MSS (ekran yakalama)
+  - OpenCV (görüntü ön işleme)
+  - Argos Translate + ctranslate2 (offline çeviri, GPU/CUDA)
+  - deep-translator (Google Translate fallback)
+
+Mevcut mimari (Adapter Pattern):
+  - src/core/engine.py          → Pipeline orkestrasyonu
+  - src/core/hook_manager.py    → Capture > Preprocess > OCR > TemporalFilter > Dispatch
+  - src/core/temporal_filter.py → Altyazı/tabela/HUD/gürültü ayrıştırma
+  - src/core/translator.py      → Argos Translate + GPU + cache
+  - src/core/vision.py          → MSS ekran yakalama
+  - src/core/preprocessor.py    → Oyun başına OCR profilleri
+  - src/core/text_cleaner.py    → Slang/geniş zaman normalizasyonu
+  - src/core/validator.py       → OCR gürültü filtreleme
+  - src/core/manual_translations.py → Fuzzy match çeviri hafızası
+  - src/adapters/               → Metro 2033, Firewatch, RDR2, Mock adapter'ları
+  - src/ui/launcher.py          → Oyun seçici UI
+  - src/ui/overlay.py           → Şeffaf overlay penceresi
+
+================================================================================
+2. ÜRÜN VİZYONU — İKİ FAZLI YAKLAŞIM
+================================================================================
+
+FAZ 1: EĞİTİM + DATASET OLUŞTURMA
+──────────────────────────────────
+
+  Oyun Açık (OCR + TemporalFilter)
+           │
+           ▼
+      Her "emit" frame → otomatik kaydet
+           │
+           ├─ frame.png (altyazı olan ekran görüntüsü)
+           ├─ bbox: [x, y, w, h] (TemporalFilter'ın bildiği konum)
+           └─ text: "Watch out!" (OCR çıktısı)
+           │
+           ▼
+      1000 frame birikince → YOLOv8-nano eğit
+           │                         ↓
+           │                   ~3MB .onnx model
+           │
+           ▼
+      Tüm OCR metinleri → GPT/Claude API ile kaliteli çeviri
+           │                         ↓
+           │                   game_xx.pack (~2-5MB)
+           │
+           ▼
+      Model + Dataset → GamePack yükle (CDN)
+
+  İlk oyuncu bir oyunu ~2-3 saat oynadığında pack hazır hale gelir.
+  2-3 kişi aynı oyunu oynarsa 1 saatte pack çıkar.
+  Yeni çıkan bir oyun için aynı gün pack yayınlamak mümkündür.
+
+
+FAZ 2: SON KULLANICI DENEYİMİ
+──────────────────────────────
+
+  Oyun başlat → GamePack var mı?
+           │
+           ├─ YOK → OCR + TemporalFilter (Faz 1'e katkı, ~200ms gecikme)
+           │
+           └─ VAR → Model yükle (.onnx)
+                      │
+                      ▼
+                Ekran → Model inference (GPU 2ms / CPU 10ms)
+                      │
+                      ▼
+                Altyazı bölgesi crop → OCR (30ms)
+                      │
+                      ▼
+                Hash lookup → pack'ten çeviri (0ms)
+                      │
+                      ▼
+                Overlay göster
+
+                Toplam gecikme: ~40ms (insan gözüyle algılanamaz)
+
+  Pack olmayan durumda da sistem çalışır:
+    - OCR + canlı çeviri (Argos, ~200-400ms)
+    - Çeviri cache'i zamanla dolar, hit rate %90+ seviyesine ulaşır
+    - Kullanıcı oynadıkça cache kendi kendini iyileştirir
+    - Bu oturumlardan toplanan veriler pack oluşturmak için kullanılır
+
+
+GERÇEKÇİ RAKAMLAR
+─────────────────
+
+  ┌────────────────────────────────────────────┬────────────────────────────────────────────┐
+  │                   Metrik                   │                   Değer                    │
+  ├────────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Model boyutu (YOLOv8-nano ONNX)            │ ~3-5 MB                                    │
+  ├────────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Dataset boyutu (1000 diyalog, çevirili)    │ ~0.5-2 MB                                  │
+  ├────────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Oyun başına pack                           │ ~5-8 MB                                    │
+  ├────────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Eğitim süresi (1000 frame, GPU)            │ ~10-15 dakika                              │
+  ├────────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ İlk oyuncunun oynaması gereken süre        │ ~2-3 saat                                  │
+  ├────────────────────────────────────────────┼────────────────────────────────────────────┤
+  │ Aynı gün coverage                          │ Mümkün, 2 kişi oynarsa 1 saatte pack hazır │
+  └────────────────────────────────────────────┴────────────────────────────────────────────┘
+
+================================================================================
+3. PAZAR ANALİZİ VE GELİR PROJEKSİYONU
+================================================================================
+
+HEDEF KİTLE
+───────────
+
+Steam'de aylık 132M aktif kullanıcı. İngilizce anadili olmayan, hikayeli
+single-player oyun oynayan, kendi dilinde lokalizasyon bulamayan kitle:
+
+  ┌────────────────────────┬──────────────────┬────────────────────────────────────────────────┐
+  │         Bölge          │ Potansiyel kitle │                      Niye                      │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ Rusya/BDT              │ ~15M             │ Çoğu oyun Rusça almıyor, PC gaming devasa      │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ Latin Amerika          │ ~12M             │ Portekizce/İspanyolca çeviri nadir             │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ Türkiye                │ ~8M              │ Steam Türkiye'de en aktif PC pazarlarından     │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ Polonya/Doğu Avrupa    │ ~5M              │ Lehçe lokalizasyon az                          │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ Güneydoğu Asya         │ ~10M             │ Thai, Vietnamca, Endonezyaca neredeyse hiç yok │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ Orta Doğu/Kuzey Afrika │ ~8M              │ Arapça destek çok düşük                        │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ Hindistan/Pakistan     │ ~5M              │ Bölgesel dillerde sıfır destek                 │
+  ├────────────────────────┼──────────────────┼────────────────────────────────────────────────┤
+  │ TOPLAM                 │ ~60M+            │ Adreslenebilir pazar                           │
+  └────────────────────────┴──────────────────┴────────────────────────────────────────────────┘
+
+FİYATLANDIRMA: $4.99 (Steam, tek seferlik)
+───────────────────────────────────────────
+
+  ┌───────────────────┬───────────┬────────────┬───────────────────┬────────────┐
+  │      Dönüşüm      │ Kullanıcı │ Brüt gelir │ Steam %30 kesinti │    Net     │
+  ├───────────────────┼───────────┼────────────┼───────────────────┼────────────┤
+  │ %0.1 (kötümser)   │ 60.000    │ $299.400   │ -$89.820          │ $209.580   │
+  ├───────────────────┼───────────┼────────────┼───────────────────┼────────────┤
+  │ %0.5 (gerçekçi)   │ 300.000   │ $1.497.000 │ -$449.100         │ $1.047.900 │
+  ├───────────────────┼───────────┼────────────┼───────────────────┼────────────┤
+  │ %1 (iyimser)      │ 600.000   │ $2.994.000 │ -$898.200         │ $2.095.800 │
+  ├───────────────────┼───────────┼────────────┼───────────────────┼────────────┤
+  │ %3 (viral)        │ 1.8M      │ $8.982.000 │ -$2.694.600       │ $6.287.400 │
+  └───────────────────┴───────────┴────────────┴───────────────────┴────────────┘
+
+  Not: Steam'de niş araçlar genelde %0.5-3 arası dönüşüm yakalar.
+  Dönüşüm oranı, görünürlük (Steam algoritması), inceleme puanı ve
+  topluluk etkisiyle doğru orantılıdır.
+
+PREMIUM ABONELIK (opsiyonel, aylık $1-2)
+─────────────────────────────────────────
+
+  ┌──────────────────────┬─────────┬──────────┐
+  │    Premium abone     │  Aylık  │  Yıllık  │
+  ├──────────────────────┼─────────┼──────────┤
+  │ 5.000                │ $7.500  │ $90.000  │
+  ├──────────────────────┼─────────┼──────────┤
+  │ 20.000               │ $30.000 │ $360.000 │
+  ├──────────────────────┼─────────┼──────────┤
+  │ 50.000               │ $75.000 │ $900.000 │
+  └──────────────────────┴─────────┴──────────┘
+
+  Abonelik değer önerileri:
+    - Yeni oyun pack'lerine erken erişim
+    - AI (GPT/Claude) ile kalite kontrollü çeviriler
+    - Öncelikli oyun desteği talebi
+    - Bulut cache senkronizasyonu
+
+STÜDYO LISANSLAMA (B2B)
+────────────────────────
+
+  - Indie stüdyolara lokalizasyon SDK'sı: oyun başı $200-2.000/yıl
+  - Lokalizasyon firmalarına LQA/draft çeviri aracı
+  - Potansiyel: yıllık $50.000-100.000 (küçük ölçekli)
+
+GERÇEKÇİ TOPLAM (ORTA SENARYO, İLK YIL)
+────────────────────────────────────────
+
+  Steam satış (300K × $4.99)          ~$1.047.900
+  Premium abone (20K × $1.5/ay)       ~$360.000
+  Stüdyo lisanslama (küçük ölçekli)    ~$75.000
+                                       ───────────
+  TOPLAM                               ~$1.482.900
+
+  Türkiye'den 2-3 kişilik bir ekip için yıllık ~$1.5M çok ciddi bir rakamdır.
+
+
+================================================================================
+4. TEKNİK YOL HARİTASI
+================================================================================
+
+MEVCUT DURUM — TAMAMLANANLAR
+────────────────────────────
+
+  [✓] OCR pipeline (RapidOCR + MSS + OpenCV)
+  [✓] Offline çeviri (Argos Translate + GPU CUDA)
+  [✓] Adapter pattern (Metro 2033, Firewatch, RDR2, Mock)
+  [✓] Tkinter launcher + overlay
+  [✓] Text normalization (slang → formal English)
+  [✓] OCR validation (gürültü filtreleme)
+  [✓] Translation memory (exact + fuzzy match)
+  [✓] Temporal filter (altyazı vs tabela vs HUD ayrıştırma)
+  [✓] Çeviri cache mekanizması
+  [✓] CSV loglama (logs/translations.csv)
+
+EKSIKLER — YAPILACAKLAR
+───────────────────────
+
+  1. FRAME COLLECTOR
+     TemporalFilter'ın "emit" kararı verdiği frame'leri otomatik
+     kaydeden modül. Diske frame.png + bbox + OCR metni yazar.
+     Tahmini süre: 2-3 saat.
+
+  2. MODEL TRAINER
+     YOLOv8-nano fine-tune pipeline'ı. 1000 frame birikince
+     otomatik tetiklenir, ONNX model çıktısı üretir.
+     Tahmini süre: 1-2 gün (Ultralytics API).
+
+  3. ONNX INFERENCE RUNNER
+     ONNX Runtime ile modeli runtime'da çalıştıracak sınıf.
+     GPU'da 2ms, CPU'da 10ms hedef.
+     Tahmini süre: 1 gün.
+
+  4. GAMEPACK FORMATI
+     .gamepack = model.onnx + dataset.json + metadata.json
+     Tek bir zip/arşiv, 5-8 MB.
+     Tahmini süre: 4-6 saat.
+
+  5. AI ÇEVIRI BATCH
+     Toplu OCR metinlerini GPT-4/Claude API ile bağlamsal
+     kalitede çeviren pipeline.
+     Tahmini süre: 1-2 gün.
+
+  6. PACK SUNUCUSU
+     Basit bir CDN/API endpoint. Oyun ID'si ile pack sorgula,
+     yoksa upload et, varsa indir.
+     Tahmini süre: 2-3 gün (Cloudflare R2 + basit API).
+
+  7. KALIBRASYON SIHIRBAZI
+     Kullanıcının fareyle altyazı bölgesini seçtiği, sistemin
+     renk analizi yapıp OCR profili önerdiği interaktif UI.
+     Tahmini süre: 2-3 gün.
+
+  8. SUBTITLE PARSER'LAR
+     Popüler oyunların altyazı dosyalarını doğrudan okuyan
+     parser'lar (.locres, .xml, .txt, .yarn, .json).
+     Tahmini süre: format başına 1-6 saat.
+
+
+TEKNİK BORÇLAR (MEVCUT KODDA)
+─────────────────────────────
+
+  - engine.py'de _internal_subtitle_handler iki kere tanımlanmış
+  - requirements.txt eksik (rapidocr, argostranslate, ctranslate2 yok)
+  - İki ayrı TranslationService (core ve services altında)
+  - Metro renk maskesi mantık hatası (> yerine < olması muhtemel)
+  - GameDetector sadece Metro 2033'ü destekliyor
+  - Launcher/Overlay Tkinter entegrasyonu "MVP Hack" seviyesinde
+
+
+================================================================================
+5. ALTYAZI KAYNAKLARI — OYUN DESTEK MATRISI
+================================================================================
+
+DOĞRUDAN DOSYADAN ÇEKILEBILENLER (KOLAY)
+─────────────────────────────────────────
+
+  ┌────────────────────────────────┬──────────────────┬──────────────┐
+  │             Oyun               │      Format      │   Zorluk     │
+  ├────────────────────────────────┼──────────────────┼──────────────┤
+  │ Half-Life 2 / Portal 1-2       │ .txt (VDF)       │ 10 dakika    │
+  │ S.T.A.L.K.E.R. serisi         │ .xml             │ 30 dakika    │
+  │ Disco Elysium                  │ .json            │ 30 dakika    │
+  │ Subnautica                     │ .json            │ 30 dakika    │
+  │ Hollow Knight                  │ .txt/.xml        │ 30 dakika    │
+  │ Metro serisi (.vcfx decode)    │ .vcfx → .txt     │ 1-2 saat     │
+  │ Unreal Engine oyunları (.locres)│ .locres          │ 2-3 saat*    │
+  │ Witcher 3 (.w3strings)         │ .w3strings → CSV │ 3-4 saat     │
+  └────────────────────────────────┴──────────────────┴──────────────┘
+
+  * .locres parser bir kere yazılınca YÜZLERCE UE oyununa çalışır.
+
+ARŞIV IÇINDE, EXTRACTOR GEREKENLER (ORTA)
+──────────────────────────────────────────
+
+  ┌────────────────────────────────┬──────────────────┬──────────────┐
+  │             Oyun               │      Format      │   Zorluk     │
+  ├────────────────────────────────┼──────────────────┼──────────────┤
+  │ Cyberpunk 2077                 │ .json (.archive) │ 4-6 saat     │
+  │ Fallout 4 / Skyrim             │ .strings (.ba2)  │ 4-6 saat     │
+  │ Mass Effect Legendary          │ .tlk             │ 4-6 saat     │
+  │ Baldur's Gate 3                │ .xml/.loca       │ 3-4 saat     │
+  │ Kingdom Come: Deliverance      │ .xml (.pak)      │ 3-4 saat     │
+  └────────────────────────────────┴──────────────────┴──────────────┘
+
+PRATIKTE IMKANSIZ (OCR FALLBACK GEREKIR)
+─────────────────────────────────────────
+
+  - EA Frostbite oyunları (Battlefield, FIFA, Dragon Age Veilguard)
+  - Call of Duty serisi (.ff arşivleri, format kapalı)
+  - Online-only oyunlar (Destiny 2, The Division)
+  - Denuvo + özel motor kombinasyonları
+  - FromSoftware oyunları (Elden Ring, Dark Souls — .msgbnd)
+
+  Bu oyunlar için OCR + TemporalFilter yedek çözüm olarak çalışır.
+  Aynı tool hem pre-load hem OCR modunda çalışabildiği için
+  kapsama alanı %70 seviyesine çıkar (Unity + Unreal Engine oyunları).
+
+
+================================================================================
+6. RİSKLER VE ÖNLEMLER
+================================================================================
+
+  1. STEAM ONAYI
+     Overlay tabanlı tool'lar Steam'de geçmişte sorun yaşadı.
+     → Steam'in overlays and hooks politikasını hukuki olarak araştır.
+     → Alternatif olarak kendi web sitenden satıp Steam key dağıtabilirsin.
+
+  2. ANTI-CHEAT FALSE POSITIVE
+     EAC, BattlEye, VAC ekran yakalama/overlay'i cheat olarak algılayabilir.
+     → Sadece single-player oyunları destekle, anti-cheat'li oyunlarda
+       otomatik devre dışı kal.
+     → WDA_EXCLUDEFROMCAPTURE ve WS_EX_TRANSPARENT bayrakları zaten var.
+
+  3. DESTEK YÜKÜ
+     300K kullanıcı = günde 500-1000 destek talebi.
+     → Discord topluluğu + bilgi tabanı + gönüllü moderatörler.
+     → Otomatik hata raporlama ve crash dump toplama.
+
+  4. HER OYUN İÇİN AYRI PROFIL GEREKMESI
+     → Kalibrasyon sihirbazı + otomatik veri toplama ile kullanıcı
+       tarafında çözülür.
+     → Topluluk pack'leri paylaştıkça kapsama organik büyür.
+
+  5. YASAL GRİ ALAN
+     Oyun ekranını yakalayıp üzerine overlay basmak EULA'da gri bölge.
+     → Çeviri amaçlı overlay = fair use / accessibility tool olarak
+       konumlandır.
+     → Oyun dosyalarını modifiye etmiyorsun, sadece okuyorsun.
+
+================================================================================
+7. SONUÇ
+================================================================================
+
+Game Lens, teknik olarak uygulanabilir, pazar olarak karşılığı olan ve
+doğru fiyatlandırmayla ($3-5) global ölçekte anlamlı gelir üretebilecek
+bir üründür.
+
+Güçlü yanlar:
+  - Hibrit yaklaşım (pre-load + OCR fallback) ile geniş oyun kapsaması
+  - Topluluk katkısıyla kendi kendini iyileştiren veri modeli
+  - GPU hızlandırmalı offline çeviri, internet bağımsız
+  - 40ms gecikme hedefi (pack varken), 200ms (pack yokken)
+  - Rakipsiz bir alan, first-mover avantajı
+
+Zayıf yanlar:
+  - İlk sürüme kadar ciddi geliştirme gerekiyor (6-12 ay)
+  - Her oyun için pack oluşturma süreci emek yoğun
+  - Steam onayı ve anti-cheat riskleri netleşmeli
+  - Teknik destek yükü kullanıcı sayısıyla lineer artar
+
+Önerilen strateji:
+  1. MVP'yi tamamla (ilk 3 madde: frame collector + trainer + inference)
+  2. 5-10 popüler oyunla Steam'de Erken Erişim'e çık
+  3. Topluluğu Discord'da büyüt, pack katkısını teşvik et
+  4. Premium abonelik ile sürdürülebilir gelir modeline geç
+  5. B2B lisanslama için stüdyolarla görüşmelere başla
+
+================================================================================
+                            END OF REPORT
+================================================================================
