@@ -1,4 +1,0 @@
-mss
-numpy
-opencv-python
-firebase-admin>=6.0.0

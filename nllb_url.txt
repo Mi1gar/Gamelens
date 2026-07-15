@@ -1,1 +1,0 @@
-https://github.com/Mi1gar/Gamelens/releases/download/v0.1.0/nllb_model.zip
