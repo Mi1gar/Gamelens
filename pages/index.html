@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameLens — Real-time Game Subtitle Translator</title>
+    <meta name="description" content="Translate game subtitles in real-time. Supports RDR2, Metro 2033, GTA V, Firewatch and more. 200+ languages, GPU-accelerated.">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0c;
+            color: #e4e4e7;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            background: radial-gradient(ellipse at 50% 0%, #1a1a2e 0%, #0a0a0c 70%);
+        }
+        .hero img { max-width: 280px; margin-bottom: 1.5rem; }
+        .hero h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; letter-spacing: -0.02em; }
+        .hero .accent { color: #818cf8; }
+        .hero p { color: #a1a1aa; font-size: 1.2rem; max-width: 600px; margin: 1rem auto 2rem; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.85rem 2rem; border-radius: 12px; font-size: 1.05rem;
+            font-weight: 600; text-decoration: none; transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #6366f1; color: #fff;
+            box-shadow: 0 0 40px rgba(99,102,241,0.3);
+        }
+        .btn-primary:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 0 60px rgba(99,102,241,0.5); }
+        .btn-secondary {
+            background: rgba(255,255,255,0.06); color: #e4e4e7; border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+        .version { font-size: 0.85rem; color: #52525b; margin-top: 0.5rem; }
+
+        section { padding: 5rem 2rem; max-width: 1100px; margin: 0 auto; }
+        section h2 { font-size: 2rem; font-weight: 700; text-align: center; margin-bottom: 3rem; letter-spacing: -0.02em; }
+        section h2 .accent { color: #818cf8; }
+
+        .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
+        .feature {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px; padding: 2rem; transition: border-color 0.2s;
+        }
+        .feature:hover { border-color: rgba(99,102,241,0.3); }
+        .feature .icon { font-size: 2rem; margin-bottom: 1rem; }
+        .feature h3 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+        .feature p { color: #a1a1aa; font-size: 0.95rem; }
+
+        .games { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+        .game {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px; padding: 1.25rem; display: flex; align-items: center; gap: 1rem;
+        }
+        .game img { width: 64px; height: 64px; border-radius: 8px; object-fit: cover; }
+        .game h4 { font-size: 0.95rem; }
+        .game span { font-size: 0.8rem; color: #71717a; }
+
+        .pipeline {
+            display: flex; flex-wrap: wrap; justify-content: center; align-items: center;
+            gap: 0.75rem; font-size: 0.85rem; font-family: 'SF Mono', 'Fira Code', monospace;
+        }
+        .pipe-step {
+            background: rgba(99,102,241,0.15); color: #a5b4fc;
+            padding: 0.5rem 1rem; border-radius: 8px; white-space: nowrap;
+        }
+        .pipe-arrow { color: #52525b; font-size: 1.2rem; }
+
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; text-align: center; }
+        .stat { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 1.5rem; }
+        .stat .num { font-size: 2rem; font-weight: 800; color: #818cf8; }
+        .stat .label { font-size: 0.85rem; color: #71717a; margin-top: 0.25rem; }
+
+        footer {
+            text-align: center; padding: 3rem 2rem; color: #52525b; font-size: 0.85rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        footer a { color: #71717a; text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<section class="hero">
+    <img src="https://raw.githubusercontent.com/Mi1gar/Gamelens/main/icons/logo/gamelens_logo.png" alt="GameLens Logo" onerror="this.style.display='none'">
+    <h1>Game <span class="accent">Subtitle</span> Translator</h1>
+    <p>Real-time on-screen subtitle translation for any game. GPU-accelerated, 200+ languages, zero configuration.</p>
+    <div>
+        <a href="https://github.com/Mi1gar/Gamelens/releases/latest" class="btn btn-primary">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download v0.1.6
+        </a>
+        <p class="version">Windows 10/11 &bull; 246 MB &bull; Free</p>
+    </div>
+</section>
+
+<section>
+    <h2>How it <span class="accent">Works</span></h2>
+    <div class="pipeline">
+        <span class="pipe-step">Screen Capture</span><span class="pipe-arrow">→</span>
+        <span class="pipe-step">YOLO Detection</span><span class="pipe-arrow">→</span>
+        <span class="pipe-step">OCR</span><span class="pipe-arrow">→</span>
+        <span class="pipe-step">NLLB-200 Translation</span><span class="pipe-arrow">→</span>
+        <span class="pipe-step">Overlay</span>
+    </div>
+</section>
+
+<section>
+    <h2><span class="accent">Features</span></h2>
+    <div class="features">
+        <div class="feature">
+            <div class="icon">🌍</div>
+            <h3>200+ Languages</h3>
+            <p>Powered by Meta's NLLB-200 model. Translate from English to Turkish, German, French, Japanese, and 200+ more.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">⚡</div>
+            <h3>GPU Accelerated</h3>
+            <p>CUDA + ONNX Runtime + CTranslate2 INT8. ~40ms translation latency on modern NVIDIA GPUs.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">🎮</div>
+            <h3>Game-Aware</h3>
+            <p>Per-game adapters with tuned OCR profiles. YOLO subtitle detection trained on thousands of game screenshots.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">🔒</div>
+            <h3>Privacy First</h3>
+            <p>Everything runs locally on your machine. No cloud translation, no data leaves your PC.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">🔄</div>
+            <h3>Auto-Update</h3>
+            <p>EXE updates via GitHub Releases. YOLO model updates via Firebase. Always on the latest version.</p>
+        </div>
+        <div class="feature">
+            <div class="icon">📚</div>
+            <h3>Growing Memory</h3>
+            <p>Translations are cached locally. The more you play, the faster and more accurate it gets.</p>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>Supported <span class="accent">Games</span></h2>
+    <div class="games">
+        <div class="game">
+            <img src="https://raw.githubusercontent.com/Mi1gar/Gamelens/main/icons/cards/rdr2.png" alt="RDR2" onerror="this.style.background='#1a1a2e'">
+            <div><h4>Red Dead Redemption 2</h4><span>Cinematic subtitles &bull; Optimized</span></div>
+        </div>
+        <div class="game">
+            <img src="https://raw.githubusercontent.com/Mi1gar/Gamelens/main/icons/cards/metro.png" alt="Metro 2033" onerror="this.style.background='#1a1a2e'">
+            <div><h4>Metro 2033 Redux</h4><span>Orange subtitles &bull; Color-aware OCR</span></div>
+        </div>
+        <div class="game">
+            <img src="https://raw.githubusercontent.com/Mi1gar/Gamelens/main/icons/cards/gta5.png" alt="GTA V" onerror="this.style.background='#1a1a2e'">
+            <div><h4>Grand Theft Auto V</h4><span>HUD filtering &bull; Dialogue mode</span></div>
+        </div>
+        <div class="game">
+            <img src="https://raw.githubusercontent.com/Mi1gar/Gamelens/main/icons/cards/firewatch.png" alt="Firewatch" onerror="this.style.background='#1a1a2e'">
+            <div><h4>Firewatch</h4><span>Colored subtitles &bull; Choices support</span></div>
+        </div>
+        <div class="game">
+            <img src="" alt="Generic" style="background:#1a1a2e;width:64px;height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.5rem" onerror="this.outerHTML='<div style=\'background:#1a1a2e;width:64px;height:64px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.5rem\'>🎮</div>'">
+            <div><h4>Any Game</h4><span>Generic adapter &bull; Auto-detection</span></div>
+        </div>
+    </div>
+</section>
+
+<section>
+    <h2>By the <span class="accent">Numbers</span></h2>
+    <div class="stats">
+        <div class="stat"><div class="num">~40ms</div><div class="label">Translation latency (GPU)</div></div>
+        <div class="stat"><div class="num">200+</div><div class="label">Languages supported</div></div>
+        <div class="stat"><div class="num">30 FPS</div><div class="label">Capture rate</div></div>
+        <div class="stat"><div class="num">594 MB</div><div class="label">NLLB-200 model (one-time)</div></div>
+    </div>
+</section>
+
+<section style="text-align:center;">
+    <h2>Ready to <span class="accent">Play?</span></h2>
+    <p style="color:#a1a1aa;margin-bottom:2rem;max-width:500px;margin-left:auto;margin-right:auto;">Download the installer and start translating your games in under a minute.</p>
+    <a href="https://github.com/Mi1gar/Gamelens/releases/latest" class="btn btn-primary" style="font-size:1.15rem;padding:1rem 2.5rem;">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download GameLens v0.1.6
+    </a>
+    <p class="version" style="margin-top:0.75rem;">Windows 10/11 &bull; NVIDIA GPU recommended &bull; 246 MB installer</p>
+</section>
+
+<footer>
+    <p>GameLens &copy; 2026 &mdash; <a href="https://github.com/Mi1gar/Gamelens">GitHub</a></p>
+</footer>
+</body>
+</html>
